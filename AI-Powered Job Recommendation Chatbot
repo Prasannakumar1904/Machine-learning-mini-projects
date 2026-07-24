@@ -1,0 +1,102 @@
+!pip install -q groq pandas
+import os
+import zipfile
+import pandas as pd
+from groq import Groq
+
+# ==========================
+# Groq API
+# ==========================
+GROQ_API_KEY = "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"
+
+client = Groq(api_key=GROQ_API_KEY)
+
+# ==========================
+# Load Dataset
+# ==========================
+ZIP_FILE = "/content/NaukriData_Data Science.csv.zip"
+
+with zipfile.ZipFile(ZIP_FILE, 'r') as z:
+    csv_file = z.namelist()[0]
+    with z.open(csv_file) as f:
+        df = pd.read_csv(f)
+
+print("Dataset Loaded Successfully")
+print(df.head())
+
+# ==========================
+# Search Function
+# ==========================
+def search_jobs(question):
+
+    question = question.lower()
+
+    mask = df.astype(str).apply(
+        lambda col: col.str.lower().str.contains(question, na=False)
+    )
+
+    results = df[mask.any(axis=1)]
+
+    if len(results) == 0:
+        return None
+
+    return results.head(15)
+
+# ==========================
+# Chatbot
+# ==========================
+def chatbot(question):
+
+    results = search_jobs(question)
+
+    if results is None:
+        return "No matching job found."
+
+    context = results.to_string(index=False)
+
+    prompt = f"""
+You are a Job Recommendation Assistant.
+
+Use ONLY the job records below.
+
+JOB DATA
+
+{context}
+
+QUESTION
+
+{question}
+
+Answer clearly.
+"""
+
+    response = client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[
+            {
+                "role":"user",
+                "content":prompt
+            }
+        ],
+        temperature=0,
+        max_tokens=400
+    )
+
+    return response.choices[0].message.content
+
+# ==========================
+# Chat Loop
+# ==========================
+print("\nJob Chatbot Ready")
+print("Type exit to stop")
+
+while True:
+
+    q = input("\nYou : ")
+
+    if q.lower() == "exit":
+        break
+
+    ans = chatbot(q)
+
+    print("\nBot :", ans)
